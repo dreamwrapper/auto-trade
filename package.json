@@ -12,5 +12,8 @@
     "@wagmi/connectors": "^5.0.26",
     "@wagmi/core": "^2.12.2",
     "viem": "2.x"
+  },
+  "scripts": {
+    "start": "bun bot.ts"
   }
 }
