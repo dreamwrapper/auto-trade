@@ -14,6 +14,6 @@
     "viem": "2.x"
   },
   "scripts": {
-    "start": "bun bot.ts"
+    "start": "bun index.ts"
   }
 }
