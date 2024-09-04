@@ -1,4 +1,4 @@
-import { parseEther } from 'viem';
+import { parseEther, formatEther } from 'viem';
 import { exactCoinforTokens, exactTokensforCoin } from './func/swap.type';
 import {
   OCTASWAP_ROUTER_ADDRESS,
@@ -9,16 +9,36 @@ import { client } from './config/viem.config';
 import { getTokenBalance } from './func/token.balance';
 import { approveToken } from './func/approve';
 import { tokenAllowance } from './func/allowance';
+import { getNativeBalance } from './func/native.balance';
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getRandomAmount(min: bigint, max: bigint): bigint {
+  return BigInt(Math.floor(Math.random() * Number(max - min + 1n))) + min;
 }
 
 async function main() {
   while (true) {
     try {
       const RECEIVER = client.account.address;
-      const COIN_FOR_TOKEN_AMOUNT_IN = parseEther('10');
+
+      const nativeBalance = await getNativeBalance(RECEIVER);
+      const reserveFees = parseEther('0.01');
+      const minAmount = parseEther('10');
+      const maxAvailableSwap = nativeBalance - reserveFees;
+
+      if (maxAvailableSwap <= minAmount) {
+        console.log('Insufficient balance for swap. Stopping...');
+        break;
+      }
+
+      const COIN_FOR_TOKEN_AMOUNT_IN = getRandomAmount(
+        minAmount,
+        maxAvailableSwap
+      );
+
       const AMOUNT_OUT_MIN = parseEther('0');
       const ADDRESS_A = OCTASWAP_TOKEN_ADDRESS;
       const ADDRESS_B = OCTASWAP_WOCTA_ADDRESS;
@@ -27,7 +47,9 @@ async function main() {
       console.log('Swap started at ' + new Date().toLocaleString(), '\n');
 
       // SWAPPING OCTA TO OCS
-      console.log(`Swapping ${COIN_FOR_TOKEN_AMOUNT_IN} OCTA to OCS`);
+      console.log(
+        `Swapping ${formatEther(COIN_FOR_TOKEN_AMOUNT_IN)} OCTA to OCS`
+      );
       const cft = await exactCoinforTokens(
         COIN_FOR_TOKEN_AMOUNT_IN,
         AMOUNT_OUT_MIN,
@@ -36,8 +58,10 @@ async function main() {
         RECEIVER,
         DEADLINE
       );
-      await client.writeContract(cft.request);
-      console.log('Swapping OCTA to OCS successful!\n');
+      const cftReceipt = await client.writeContract(cft.request);
+      console.log(
+        `Swapping OCTA to OCS successful! Transaction hash: ${cftReceipt}\n`
+      );
 
       // FETCHING OCS BALANCE FROM THE BOT ACCOUNT
       console.log('Fetching token balance...');
@@ -55,13 +79,17 @@ async function main() {
       console.log('Fetching token balance successful!\n');
 
       // APPROVING OCS BALANCE TO ROUTER
-      console.log(`Approving ${tokenForCoinAmountIn} OCS`);
+      console.log(`Approving ${formatEther(tokenForCoinAmountIn)} OCS`);
       const approve = await approveToken(
         OCTASWAP_ROUTER_ADDRESS,
         tokenForCoinAmountIn
       );
-      await client.writeContract(approve.request);
-      console.log(`Approve ${tokenForCoinAmountIn} successful!\n`);
+      const approveReceipt = await client.writeContract(approve.request);
+      console.log(
+        `Approve ${formatEther(
+          tokenForCoinAmountIn
+        )} OCS successful! Transaction hash: ${approveReceipt}\n`
+      );
 
       // CHECK ALLOWANCE
       console.log('Checking token allowance...');
@@ -79,7 +107,7 @@ async function main() {
       console.log('Checking allowance successful!\n');
 
       // SWAPPING OCS TO OCTA
-      console.log(`Swapping ${tokenForCoinAmountIn} OCS to OCTA`);
+      console.log(`Swapping ${formatEther(tokenForCoinAmountIn)} OCS to OCTA`);
       const tfc = await exactTokensforCoin(
         tokenForCoinAmountIn,
         AMOUNT_OUT_MIN,
@@ -88,13 +116,15 @@ async function main() {
         RECEIVER,
         DEADLINE
       );
-      await client.writeContract(tfc.request);
-      console.log('Swapping OCS to OCTA successful!\n');
+      const tfcReceipt = await client.writeContract(tfc.request);
+      console.log(
+        `Swapping OCS to OCTA successful! Transaction hash: ${tfcReceipt}\n`
+      );
 
       console.log('Waiting 15 minutes for another trade...\n');
       await delay(15 * 60 * 1000);
     } catch (error) {
-      console.error(error);
+      console.error('Error occurred:', error);
       console.log('Waiting 1 minute before retrying...\n');
 
       await delay(60000);
@@ -102,4 +132,4 @@ async function main() {
   }
 }
 
-main();
+main().catch(console.error);
